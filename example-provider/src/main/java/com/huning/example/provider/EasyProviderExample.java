@@ -1,12 +1,16 @@
 package com.huning.example.provider;
 
 import com.huning.example.common.service.UserService;
+import com.huning.yurpc.RpcApplication;
 import com.huning.yurpc.registry.LocalRegistry;
 import com.huning.yurpc.server.HttpServer;
 import com.huning.yurpc.server.VertxHttpServer;
 
 public class EasyProviderExample {
     public static void main(String[] args) {
+
+        RpcApplication.init();
+
         //注册服务
         //哪一个名称的服务, 被哪一个服务类实现, 一个接口可以换不同的实现
         LocalRegistry.register(UserService.class.getName(), UserServiceImpl.class);
