@@ -1,0 +1,2 @@
+hessian=com.huning.yurpc.serializer.HessianSerializer
+kryo=com.huning.yurpc.serializer.KryoSerializer

@@ -1,10 +1,12 @@
 package com.huning.yurpc.server;
 
+import com.huning.yurpc.RpcApplication;
 import com.huning.yurpc.model.RpcRequest;
 import com.huning.yurpc.model.RpcResponse;
 import com.huning.yurpc.registry.LocalRegistry;
 import com.huning.yurpc.serializer.JDKSerializer;
 import com.huning.yurpc.serializer.Serializer;
+import com.huning.yurpc.serializer.SerializerFactory;
 import io.vertx.core.Handler;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.http.HttpServerRequest;
@@ -19,7 +21,7 @@ public class HttpServerHandler implements Handler<HttpServerRequest> {
     @Override
     public void handle(HttpServerRequest request) {
         //制定序列化容器
-        final Serializer serializer = new JDKSerializer();
+        final Serializer serializer = SerializerFactory.getInstance(RpcApplication.getRpcConfig().getSerializer());
 
         //记录日志
         System.out.println("Received request: " + request.method() + " " + request.uri());

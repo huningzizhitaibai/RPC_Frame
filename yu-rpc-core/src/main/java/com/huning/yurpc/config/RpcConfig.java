@@ -1,5 +1,6 @@
 package com.huning.yurpc.config;
 
+import com.huning.yurpc.serializer.SerializerKeys;
 import lombok.Data;
 
 @Data
@@ -19,4 +20,9 @@ public class RpcConfig {
      * 是否开启mock功能
      */
     private boolean mock = false;
+
+    /**
+     * 序列化器
+     */
+    private String serializer = SerializerKeys.JDK;
 }

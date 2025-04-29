@@ -1,0 +1,2 @@
+json=com.huning.yurpc.serializer.JSONSerializer
+jdk=com.huning.yurpc.serializer.JDKSerializer
