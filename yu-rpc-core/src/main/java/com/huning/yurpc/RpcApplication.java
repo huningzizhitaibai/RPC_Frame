@@ -1,7 +1,11 @@
 package com.huning.yurpc;
 
+import com.huning.yurpc.config.RegistryConfig;
 import com.huning.yurpc.config.RpcConfig;
 import com.huning.yurpc.constant.RpcConstant;
+import com.huning.yurpc.registry.Registry;
+import com.huning.yurpc.registry.RegistryFactory;
+import com.huning.yurpc.spi.SpiLoader;
 import com.huning.yurpc.utils.ConfigUtils;
 import lombok.extern.slf4j.Slf4j;
 
@@ -10,13 +14,21 @@ public class RpcApplication {
     private static volatile RpcConfig rpcConfig;
 
 
+    //在newConfig中可以指定使用哪个config对象进行初始化
     public static void init(RpcConfig newConfig) {
+        //框架相关的初始化
         rpcConfig = newConfig;
         log.info("rpc init, config = {}", newConfig.toString());
+
+        //注册中心初始化
+        RegistryConfig registryConfig = rpcConfig.getRegistryConfig();
+        Registry registry = RegistryFactory.getInstance(registryConfig.getRegistry());
+        registry.init(registryConfig);
+        log.info("registry init, registry = {}", registry.toString());
     }
 
     /**
-     * 初始化
+     * 默认初始化
      */
     public static void init() {
         RpcConfig newRpcConfig;

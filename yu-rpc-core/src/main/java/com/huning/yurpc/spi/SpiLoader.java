@@ -1,6 +1,7 @@
 package com.huning.yurpc.spi;
 
 import cn.hutool.core.io.resource.ResourceUtil;
+import com.huning.yurpc.registry.Registry;
 import com.huning.yurpc.serializer.Serializer;
 import lombok.extern.slf4j.Slf4j;
 
@@ -53,6 +54,7 @@ public class SpiLoader {
      * 并不是加载所有类型的Serializer, 而是加载所有类型的SPI
      * 加载Serializer都是一次性加载进来的, 并不是选择用哪个就加载哪个
      * 而是将所有的都一次性转化成实例, 然后选择调用使用.
+     * 在使用中可以通过在static中直接使用load进行加载, 也可以在所有项目完成后, 直接调用这个方法进行初始化
      */
     public static void loadAll(){
         log.info("加载所有的SPI");
@@ -106,6 +108,8 @@ public class SpiLoader {
         Map<String, Class<?>> keyClassMap = new HashMap<>();
         for (String scanDir : SCAN_DIRS) {
             //获取文件目录下中的文件内容
+            //注意在文件目录下的相应文件名要与loadClass.getName()相同, 不然不会加载
+            //之前一个bug就是调取Registry接口的全部实现失败, 因为全限名写错了.
             List<URL> resources = ResourceUtil.getResources(scanDir + loadClass.getName());
             for (URL resource : resources) {
                 try{
