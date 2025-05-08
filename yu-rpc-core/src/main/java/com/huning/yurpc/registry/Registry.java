@@ -3,7 +3,9 @@ package com.huning.yurpc.registry;
 import com.huning.yurpc.config.RegistryConfig;
 import com.huning.yurpc.model.ServiceMetaInfo;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 定义了对于yuRPC框架下, 注册中心应该具有的一些功能
@@ -34,4 +36,6 @@ public interface Registry {
      * 销毁
      */
     void destroy();
+
+    void heartBeat();
 }

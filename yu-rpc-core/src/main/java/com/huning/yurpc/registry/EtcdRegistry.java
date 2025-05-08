@@ -1,5 +1,9 @@
 package com.huning.yurpc.registry;
 
+import cn.hutool.core.collection.CollUtil;
+import cn.hutool.cron.CronUtil;
+import cn.hutool.cron.task.CronTask;
+import cn.hutool.cron.task.Task;
 import cn.hutool.json.JSONUtil;
 import com.huning.yurpc.config.RegistryConfig;
 import com.huning.yurpc.model.ServiceMetaInfo;
@@ -9,7 +13,9 @@ import io.etcd.jetcd.options.PutOption;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
@@ -33,6 +39,9 @@ public class EtcdRegistry implements Registry {
      */
     private static final String ETCD_ROOT_PATH = "/rpc/";
 
+    //用于记录所有注册的节点服务
+    private final Set<String> localRegistryNodeSet = new HashSet<>();
+
     /**
      * 初始化etcd服务控制端
      * @param registryConfig
@@ -43,6 +52,14 @@ public class EtcdRegistry implements Registry {
                 .connectTimeout(Duration.ofMillis(registryConfig.getTimeout())) //使用Duration将Long转化为Millis单位毫秒
                 .build();
         kvClient = client.getKVClient();
+
+        /**
+         * 该类是一个服务类或客户类本地的Etcd交互类, 其实就是本地的一个客户端
+         * 所以直接在初始化时, 就开启这个heartBeat定时任务即可
+         */
+        heartBeat();
+
+
     }
 
 
@@ -74,6 +91,8 @@ public class EtcdRegistry implements Registry {
         PutOption putOption = PutOption.builder().withLeaseId(leaseId).build();
         //kvClient应该就是Key-Value的客户端.
         kvClient.put(key, value, putOption).get();
+
+        localRegistryNodeSet.add(registerKey);
     }
 
 
@@ -82,7 +101,9 @@ public class EtcdRegistry implements Registry {
      * @param serviceMetaInfo
      */
     public void unRegister(ServiceMetaInfo serviceMetaInfo) {
+
         kvClient.delete(ByteSequence.from(ETCD_ROOT_PATH +serviceMetaInfo.getServiceNodeKey(), StandardCharsets.UTF_8));
+        localRegistryNodeSet.remove(serviceMetaInfo.getServiceNodeKey());
     }
 
     /**
@@ -119,12 +140,55 @@ public class EtcdRegistry implements Registry {
      */
     public void destroy() {
         System.out.println("当前节点下线");
+
+        //主动注销节点服务, 否则可能会存在至多ttl时间的空窗期
+        for (String nodeKey : localRegistryNodeSet) {
+            try{
+                kvClient.delete(ByteSequence.from(nodeKey, StandardCharsets.UTF_8)).get();
+            }catch (Exception e){
+                throw new RuntimeException(nodeKey + "节点下线失败");
+            }
+        }
+
+        //关闭etcd连接
         if (kvClient != null) {
             kvClient.close();
         }
         if (client != null) {
             client.close();
         }
+    }
+
+    public void heartBeat() {
+        //10秒续约一次
+        CronUtil.schedule("*/10 * * * * *", new Task(){
+            @Override
+            public void execute() {
+                //遍历本节点所有的key
+                for (String key : localRegistryNodeSet) {
+                    try{
+                        List<KeyValue> keyValues = kvClient.get(ByteSequence.from(key, StandardCharsets.UTF_8))
+                                .get()
+                                .getKvs();
+
+                        if (CollUtil.isEmpty(keyValues)) {
+                            continue;
+                        }
+                        KeyValue keyValue = keyValues.get(0);
+                        String value = keyValue.getValue().toString(StandardCharsets.UTF_8);
+                        ServiceMetaInfo serviceMetaInfo = JSONUtil.toBean(value, ServiceMetaInfo.class);
+                        register(serviceMetaInfo);
+                    } catch (Exception e) {
+                        throw new RuntimeException(key+"续签失败");
+                    }
+
+                }
+            }
+        });
+
+        //支持秒级别定时任务
+        CronUtil.setMatchSecond(true);
+        CronUtil.start();
     }
 
 

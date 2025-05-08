@@ -25,6 +25,10 @@ public class RpcApplication {
         Registry registry = RegistryFactory.getInstance(registryConfig.getRegistry());
         registry.init(registryConfig);
         log.info("registry init, registry = {}", registry.toString());
+
+
+        //在当前服务节点jvm停止服务时, 意味着节点下线, 需要执行destroy操作
+        Runtime.getRuntime().addShutdownHook(new Thread(registry::destroy));
     }
 
     /**

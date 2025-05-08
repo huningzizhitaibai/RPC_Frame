@@ -27,6 +27,15 @@ public class RegistryTest {
     }
 
     @Test
+    public void heartBeatTest() throws Exception {
+        //调用下方的register执行注册
+        register();
+        //阻塞这个函数运行, 看看能否实现heartBeat
+        Thread.sleep(60 * 1000L);
+        serviceDestroy();
+    }
+
+    @Test
     public void register() throws Exception {
         ServiceMetaInfo serviceMetaInfo = new ServiceMetaInfo();
         serviceMetaInfo.setServiceName("myService");
@@ -66,5 +75,10 @@ public class RegistryTest {
         String serviceKey = serviceMetaInfo.getServiceKey();
         List<ServiceMetaInfo> serviceMetaInfoList = registry.serviceDiscovery(serviceKey);
         Assert.assertNotNull(serviceMetaInfoList);
+    }
+
+    @Test
+    public void serviceDestroy() {
+        registry.destroy();
     }
 }
