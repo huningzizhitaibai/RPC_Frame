@@ -63,7 +63,7 @@ public class RegistryTest {
         serviceMetaInfo.setServiceName("myService");
         serviceMetaInfo.setServiceVersion("1.0");
         serviceMetaInfo.setServiceHost("121.36.203.34");
-        serviceMetaInfo.setServicePort(1234);
+        serviceMetaInfo.setServicePort(1235);
         registry.unRegister(serviceMetaInfo);
     }
 
@@ -80,5 +80,27 @@ public class RegistryTest {
     @Test
     public void serviceDestroy() {
         registry.destroy();
+    }
+
+    @Test
+    public void watchTest() throws Exception {
+        //服务注册
+        register();
+        //第一次查询, 从注册中心
+        serviceDiscovery();
+
+        //第二次查询, 从本地缓存
+        serviceDiscovery();
+//        Thread.sleep(60 *1000L);
+        //注销其中一个服务
+        unRegister();
+
+//        Thread.sleep(60 * 1000L);
+        //第三次查询, 从注册中心
+        serviceDiscovery();
+
+//        Thread.sleep(60* 1000L);
+        serviceDestroy();
+
     }
 }

@@ -1,6 +1,7 @@
 package com.huning.yurpc.registry;
 
 import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.collection.ConcurrentHashSet;
 import cn.hutool.cron.CronUtil;
 import cn.hutool.cron.task.CronTask;
 import cn.hutool.cron.task.Task;
@@ -10,6 +11,7 @@ import com.huning.yurpc.model.ServiceMetaInfo;
 import io.etcd.jetcd.*;
 import io.etcd.jetcd.options.GetOption;
 import io.etcd.jetcd.options.PutOption;
+import io.etcd.jetcd.watch.WatchEvent;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -18,6 +20,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
+
+
 
 public class EtcdRegistry implements Registry {
     /**
@@ -41,6 +45,12 @@ public class EtcdRegistry implements Registry {
 
     //用于记录所有注册的节点服务
     private final Set<String> localRegistryNodeSet = new HashSet<>();
+
+    //节点记录缓存
+    private final RegistryServiceCache registryServiceCache = new RegistryServiceCache();
+
+    //记录正在监听的节点
+    private final Set<String> watchingKeySet = new ConcurrentHashSet<>();
 
     /**
      * 初始化etcd服务控制端
@@ -73,7 +83,7 @@ public class EtcdRegistry implements Registry {
         //创建一个lease的client用于获取lease
         Lease leaseClient = client.getLeaseClient();
         //获取一个创建一个lease获取其id
-        long leaseId = leaseClient.grant(30).get().getID();
+        long leaseId = leaseClient.grant(300).get().getID();
 
         //记录就是存储在根路径下,记录提供服务的Node地址和service的名称与version作为键名
         //注册中心需要的是查找服务和提供服务的对应地址, 所以需要同时存储节点的名称, 作为value
@@ -102,8 +112,13 @@ public class EtcdRegistry implements Registry {
      */
     public void unRegister(ServiceMetaInfo serviceMetaInfo) {
 
-        kvClient.delete(ByteSequence.from(ETCD_ROOT_PATH +serviceMetaInfo.getServiceNodeKey(), StandardCharsets.UTF_8));
-        localRegistryNodeSet.remove(serviceMetaInfo.getServiceNodeKey());
+        String unRegisterKey = ETCD_ROOT_PATH + serviceMetaInfo.getServiceNodeKey();
+        try {
+            kvClient.delete(ByteSequence.from(unRegisterKey, StandardCharsets.UTF_8)).get();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        localRegistryNodeSet.remove(unRegisterKey);
     }
 
     /**
@@ -112,6 +127,17 @@ public class EtcdRegistry implements Registry {
      * @return
      */
     public List<ServiceMetaInfo> serviceDiscovery(String serviceKey) {
+        //优先查询缓存
+        List<ServiceMetaInfo> cacheServiceMetaInfoList;
+        cacheServiceMetaInfoList = registryServiceCache.readCache(serviceKey);
+        if (cacheServiceMetaInfoList != null) {
+            return cacheServiceMetaInfoList;
+        }
+
+
+
+
+        //确定从注册中心获取服务
         //前缀搜索,结尾一定要加'/'
         //应为存储结构为ETCD_ROOT_PATH + serviceKey + host:port
         String searchPrefix = ETCD_ROOT_PATH +serviceKey + '/';
@@ -124,12 +150,18 @@ public class EtcdRegistry implements Registry {
                     ByteSequence.from(searchPrefix,StandardCharsets.UTF_8),
                     getOption).get().getKvs();
 
-            return keyValues.stream()
+            List<ServiceMetaInfo> serviceMetaInfoList = keyValues.stream()
                     .map(keyValue -> {
+
+                        String key = keyValue.getKey().toString(StandardCharsets.UTF_8);
+                        watch(key);
+
                         String value = keyValue.getValue().toString(StandardCharsets.UTF_8);
                         return JSONUtil.toBean(value, ServiceMetaInfo.class);
                     })
                     .collect(Collectors.toList());
+            registryServiceCache.writeCache(serviceKey,serviceMetaInfoList);
+            return serviceMetaInfoList;
         } catch (Exception e) {
             throw new RuntimeException("获取服务列表失败",e);
         }
@@ -192,4 +224,32 @@ public class EtcdRegistry implements Registry {
     }
 
 
+    /**
+     * 在监听时,会查看一个serviceNodeKey的服务是否存在, 哪怕只是相同服务的一个节点下线了也会清除所有缓存,重新请求
+     * 但是在服务节点键下线后应该会停止监听
+     * todo 实现在单个节点下线后, 只在缓存中清楚相关节点的缓存, 减少请求量
+     * @param serviceNodeKey
+     */
+    @Override
+    public void watch(String serviceNodeKey) {
+        Watch watchClient = client.getWatchClient();
+
+        //之前未被监听, 开启监听
+        boolean newWatch = watchingKeySet.add(serviceNodeKey);
+        if(newWatch){
+            watchClient.watch(ByteSequence.from(serviceNodeKey,StandardCharsets.UTF_8), response ->{
+                for (WatchEvent event : response.getEvents()) {
+                    switch (event.getEventType()){
+                        case DELETE:
+                            //清楚注册服务缓存
+                            registryServiceCache.clearCache();
+                            break;
+                        case PUT:
+                        default:
+                            break;
+                    }
+                }
+            });
+        }
+    }
 }
