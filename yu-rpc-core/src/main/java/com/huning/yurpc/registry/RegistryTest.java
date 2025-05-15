@@ -7,6 +7,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.util.List;
+import java.util.function.Function;
 
 /**
  * 注册中心测试
@@ -103,4 +104,5 @@ public class RegistryTest {
         serviceDestroy();
 
     }
+
 }

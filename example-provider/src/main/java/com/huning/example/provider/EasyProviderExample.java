@@ -10,6 +10,8 @@ import com.huning.yurpc.registry.Registry;
 import com.huning.yurpc.registry.RegistryFactory;
 import com.huning.yurpc.server.HttpServer;
 import com.huning.yurpc.server.VertxHttpServer;
+import com.huning.yurpc.server.tcp.VertxTcpClient;
+import com.huning.yurpc.server.tcp.VertxTcpServer;
 
 public class EasyProviderExample {
     public static void main(String[] args) {
@@ -39,7 +41,10 @@ public class EasyProviderExample {
 
         //提供服务
         //创建一个接口类对象, 指向一个实现了这个接口的实例, 方便运用不同的实现实例
-        HttpServer httpServer = new VertxHttpServer();
-        httpServer.doStart(8080);
+//        HttpServer httpServer = new VertxHttpServer();
+//        httpServer.doStart(8080);
+
+        VertxTcpServer vertxTcpServer = new VertxTcpServer();
+        vertxTcpServer.doStart(8080);
     }
 }
