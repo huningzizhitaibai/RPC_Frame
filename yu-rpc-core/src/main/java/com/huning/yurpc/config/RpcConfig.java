@@ -1,5 +1,7 @@
 package com.huning.yurpc.config;
 
+import com.huning.yurpc.loadbalancer.LoadBalancer;
+import com.huning.yurpc.loadbalancer.LoadBalancerKeys;
 import com.huning.yurpc.serializer.SerializerKeys;
 import lombok.Data;
 
@@ -31,4 +33,8 @@ public class RpcConfig {
      */
     private  RegistryConfig registryConfig = new RegistryConfig();
 
+    /**
+     * 负载均衡器
+     */
+    private String loadBalancer = LoadBalancerKeys.ROUND_ROBIN;
 }

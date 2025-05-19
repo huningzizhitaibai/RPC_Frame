@@ -7,6 +7,8 @@ import cn.hutool.http.HttpResponse;
 import com.huning.yurpc.RpcApplication;
 import com.huning.yurpc.config.RpcConfig;
 import com.huning.yurpc.constant.RpcConstant;
+import com.huning.yurpc.loadbalancer.LoadBalancer;
+import com.huning.yurpc.loadbalancer.LoadBalancerFactory;
 import com.huning.yurpc.model.RpcRequest;
 import com.huning.yurpc.model.RpcResponse;
 import com.huning.yurpc.model.ServiceMetaInfo;
@@ -23,7 +25,9 @@ import io.vertx.core.net.NetClient;
 import java.io.IOException;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 public class ServiceProxy implements InvocationHandler {
@@ -70,7 +74,12 @@ public class ServiceProxy implements InvocationHandler {
                 throw new RuntimeException("暂时没有服务地址");
             }
             //todo:后续根据优化改进选择算法, 当前选取第一个进行请求服务
-            ServiceMetaInfo selectedServiceMetaInfo = serviceMetaInfoList.get(0);
+
+            LoadBalancer newLoadBalancer = LoadBalancerFactory.getInstance(rpcConfig.getLoadBalancer());
+            Map<String, Object> requestParams = new HashMap<>();
+            //感觉在这里, 哪怕不使用methodName做参数也没什么关系,
+            requestParams.put("methodName", rpcRequest.getMethodName());
+            ServiceMetaInfo selectedServiceMetaInfo = newLoadBalancer.select(requestParams, serviceMetaInfoList);
 
 
             //尝试使用http协议进行网络发送
