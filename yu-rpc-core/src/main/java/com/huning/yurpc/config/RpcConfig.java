@@ -1,5 +1,7 @@
 package com.huning.yurpc.config;
 
+import com.huning.yurpc.fault.retry.RetryStrategy;
+import com.huning.yurpc.fault.retry.RetryStrategyKeys;
 import com.huning.yurpc.loadbalancer.LoadBalancer;
 import com.huning.yurpc.loadbalancer.LoadBalancerKeys;
 import com.huning.yurpc.serializer.SerializerKeys;
@@ -37,4 +39,9 @@ public class RpcConfig {
      * 负载均衡器
      */
     private String loadBalancer = LoadBalancerKeys.ROUND_ROBIN;
+
+    /**
+     * 默认重试方法
+     */
+    private String retryStrategy = RetryStrategyKeys.FIXED_INTERVAL;
 }

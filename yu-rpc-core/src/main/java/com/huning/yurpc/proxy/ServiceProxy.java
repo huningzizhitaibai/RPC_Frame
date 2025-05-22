@@ -7,6 +7,8 @@ import cn.hutool.http.HttpResponse;
 import com.huning.yurpc.RpcApplication;
 import com.huning.yurpc.config.RpcConfig;
 import com.huning.yurpc.constant.RpcConstant;
+import com.huning.yurpc.fault.retry.RetryStrategy;
+import com.huning.yurpc.fault.retry.RetryStrategyFactory;
 import com.huning.yurpc.loadbalancer.LoadBalancer;
 import com.huning.yurpc.loadbalancer.LoadBalancerFactory;
 import com.huning.yurpc.model.RpcRequest;
@@ -18,6 +20,7 @@ import com.huning.yurpc.registry.RegistryFactory;
 import com.huning.yurpc.serializer.JDKSerializer;
 import com.huning.yurpc.serializer.Serializer;
 import com.huning.yurpc.serializer.SerializerFactory;
+import com.huning.yurpc.server.tcp.VertxTcpClient;
 import io.vertx.core.Vertx;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.net.NetClient;
@@ -73,8 +76,9 @@ public class ServiceProxy implements InvocationHandler {
             if(CollUtil.isEmpty(serviceMetaInfoList)){
                 throw new RuntimeException("暂时没有服务地址");
             }
-            //todo:后续根据优化改进选择算法, 当前选取第一个进行请求服务
 
+
+            //根据策略选择合适的节点进行访问
             LoadBalancer newLoadBalancer = LoadBalancerFactory.getInstance(rpcConfig.getLoadBalancer());
             Map<String, Object> requestParams = new HashMap<>();
             //感觉在这里, 哪怕不使用methodName做参数也没什么关系,
@@ -95,54 +99,13 @@ public class ServiceProxy implements InvocationHandler {
 
 
             //尝试使用自定义协议, 基于Tcp服务进行传输
-            Vertx vertx = Vertx.vertx();
-            NetClient netClient=vertx.createNetClient();
-            CompletableFuture<RpcResponse> responseFuture = new CompletableFuture<>();
-            netClient.connect(selectedServiceMetaInfo.getServicePort(), selectedServiceMetaInfo.getServiceHost(),
-                    response -> {
-                        if(response.succeeded()){
-                            //获取套接字, 建立连接
-                            System.out.println("Connect to Tcp server");
-                            io.vertx.core.net.NetSocket netSocket = response.result();
 
-                            //构建发送数据
-                            ProtocolMessage<RpcRequest> protocolMessage = new ProtocolMessage<>();
-                            ProtocolMessage.Header header = new ProtocolMessage.Header();
-                            header.setMagic(ProtocolConstant.PROTOCOL_MAGIC);
-                            header.setVersion(ProtocolConstant.PROTOCOL_VERSION);
-                            //将Enum视作一个元组
-                            header.setSerializer((byte)ProtocolMessageSerializerEnum.getEnumByValue(RpcApplication.getRpcConfig().getSerializer()).getKey());
-                            header.setType((byte) ProtocolMessageTypeEnum.REQUEST.getKey());
-                            header.setRequestId(IdUtil.getSnowflakeNextId());
-                            protocolMessage.setHeader(header);
-                            protocolMessage.setBody(rpcRequest);
+            RetryStrategy retryStrategy = RetryStrategyFactory.getInstance(rpcConfig.getRetryStrategy());
+            RpcResponse rpcResponse = retryStrategy.doRetry(()->
+                    VertxTcpClient.doStart(rpcRequest, selectedServiceMetaInfo));
 
-                            //编码请求
-                            try{
-                                Buffer encodeBuffer = ProtocolMessageEncoder.encode(protocolMessage);
-                                netSocket.write(encodeBuffer);
-                            }catch (IOException e){
-                                throw new RuntimeException("协议信息序列化错误");
-                            }
-
-                            //接受响应
-                            netSocket.handler(buffer -> {
-                                try{
-                                    ProtocolMessage<RpcResponse> rpcResponseProtocolMessage = (ProtocolMessage<RpcResponse>) ProtocolMessageDecoder.decode(buffer);
-                                    responseFuture.complete(rpcResponseProtocolMessage.getBody());
-                                }catch (IOException e){
-                                    throw new RuntimeException("协议解码错误");
-                                }
-                            });
-                        }else{
-                            System.out.println("Connect to Tcp server failed");
-                        }
-                    });
-            RpcResponse rpcResponse = responseFuture.get();
-
-            //关闭连接
-            netClient.close();
             return rpcResponse.getData();
+
         }catch (Exception e) {
             e.printStackTrace();
         }

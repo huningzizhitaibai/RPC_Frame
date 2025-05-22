@@ -1,0 +1,2 @@
+no=com.huning.yurpc.fault.retry.NoRetryStrategy
+fixedInterval=com.huning.yurpc.fault.retry.FixedIntervalRetryStrategy
